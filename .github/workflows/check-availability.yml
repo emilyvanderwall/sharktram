@@ -1,0 +1,45 @@
+name: Check Tram Tour Availability
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub may delay scheduled runs during high load, so
+    # treat this as "roughly every 15 min," not exact.
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}  # lets you trigger a manual run from the Actions tab
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Restores last_state.json from the most recent previous run so we
+      # don't re-alert every 15 minutes once tickets are already available.
+      - name: Restore previous state
+        uses: actions/cache/restore@v4
+        with:
+          path: last_state.json
+          key: tram-watcher-state-${{ github.run_id }}
+          restore-keys: |
+            tram-watcher-state-
+
+      - name: Run availability check
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python tram_tour_watcher.py --once
+
+      - name: Save updated state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: last_state.json
+          key: tram-watcher-state-${{ github.run_id }}
